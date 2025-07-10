@@ -20,20 +20,40 @@ A flexible, async-first dependency supply/demand and injection framework for Swi
 ```swift
 import SupplyDemand
 
-let helloSupplier: AnySupplier = { input, _ in
-    return "Hello, \(input as! String)!"
+// The punctuation supplier, returns "!"
+let punctuationSupplier: AnySupplier = { _, _ in
+    return "!"
 }
 
-// Main supplier uses Scope to request other suppliers:
+// The hello supplier, which itself demands punctuation from the current context:
+let helloSupplier: AnySupplier = { input, scope in
+    let name = input as! String
+    // Query for the punctuation in the current scope:
+    let punctuation = try await scope.demand("punctuation", nil, .init()) as! String
+    return "Hello, \(name)\(punctuation)"
+}
+
+// The main supplier dynamically overrides the punctuation supplier:
 let mainSupplier: Supplier<Void?, String> = { _, scope in
-    return try await scope.demand("hello", "World", .init()) as! String
+    // Override punctuation with "?"
+    let result = try await scope.demand(
+        "hello", "World", 
+        ExtendSuppliers(
+            add: ["punctuation": { _, _ in "?" }]
+        )
+    ) as! String
+    return result
 }
 
-let map: [String: AnySupplier] = ["hello": helloSupplier]
+// Register your suppliers:
+let map: [String: AnySupplier] = [
+    "hello": helloSupplier,
+    "punctuation": punctuationSupplier
+]
 
-// Start a demand session:
+// Run the composition:
 let result = try await supplyDemand(mainSupplier, map: map) as! String
-print(result) // Output: Hello, World!
+print(result) // Output: Hello, World?
 ```
 
 ### Extending Suppliers at Call Time
@@ -79,7 +99,37 @@ do {
 
 ## Installation
 
-Simply copy `SupplyDemand.swift` into your project, or add via SPM (when packaged).
+### Swift Package Manager
+
+Add **SupplyDemand** to your project using Swift Package Manager.
+
+#### Via Xcode:
+
+1. Go to **File > Add Packages...**
+2. Enter the repository URL:
+   ```
+   https://github.com/ceil-swift/supply-demand.git
+   ```
+3. Choose the latest version and finish the dialog.
+
+#### Via `Package.swift`:
+
+Add the package into your project’s dependencies:
+```swift
+dependencies: [
+    .package(url: "https://github.com/ceil-swift/supply-demand.git", from: "0.0.2")
+]
+```
+
+And add `"SupplyDemand"` to the target’s dependencies:
+```swift
+.target(
+    name: "YourTarget",
+    dependencies: [
+        "SupplyDemand"
+    ]
+)
+```
 
 ---
 
